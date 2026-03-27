@@ -2,7 +2,6 @@ export async function POST(req) {
   try {
     const { messages, system } = await req.json();
 
-    // Monta o histórico no formato do Gemini
     const contents = messages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
@@ -29,11 +28,10 @@ export async function POST(req) {
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "Não consegui processar.";
 
-    // Retorna no mesmo formato que o frontend espera
     return Response.json({ content: [{ type: "text", text }] });
   } catch (error) {
     return Response.json(
-      { error: "Erro interno do servidor", details: error.message },
+      { error: "Erro interno", details: error.message },
       { status: 500 }
     );
   }
