@@ -67,6 +67,15 @@ async function callAPI(messages, systemPrompt) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      messages,
+      system: systemPrompt,
+    }),
+  });
+  const data = await res.json();
+  return (data.content || []).filter(b => b.type === "text").map(b => b.text).join("
+");
+},
+    body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1000,
       system: systemPrompt,
