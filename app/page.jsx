@@ -61,26 +61,11 @@ Ao receber uma saudação, apresente-se brevemente e pergunte como pode ajudar.`
 const TONES = ["acolhedora", "formal", "descontraída", "direta", "entusiasmada"];
 const SEGMENTS = ["Clínica Médica", "Restaurante", "Academia", "E-commerce", "Consultório", "Escritório", "Hotel", "Salão de Beleza"];
 
-// ─── API CALL (usa rota interna — API key fica segura no servidor) ─────────────
 async function callAPI(messages, systemPrompt) {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messages,
-      system: systemPrompt,
-    }),
-  });
-  const data = await res.json();
-  return (data.content || []).filter(b => b.type === "text").map(b => b.text).join("
-");
-},
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      system: systemPrompt,
-      messages,
-    }),
+    body: JSON.stringify({ messages, system: systemPrompt }),
   });
   const data = await res.json();
   return (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
@@ -127,7 +112,6 @@ export default function App() {
         input:focus,textarea:focus,select:focus{outline:none!important;border-color:#6366f1!important;box-shadow:0 0 0 3px rgba(99,102,241,0.1)!important;}
       `}</style>
 
-      {/* NAV */}
       <nav style={S.nav}>
         <div style={S.brand}>
           <div style={S.brandIcon}>
@@ -161,7 +145,6 @@ export default function App() {
   );
 }
 
-/* ── ADMIN ── */
 function Admin({ kb, setKb, activeTab, setActiveTab, onSave, saved }) {
   const tabs = [
     {id:"empresa",ic:"🏢",lb:"Empresa"},
@@ -285,7 +268,6 @@ function FaqTab({kb,setKb}){
   );
 }
 
-/* ── CHAT ── */
 function Chat({kb,messages,setMessages,input,setInput,loading,setLoading,chatStarted,setChatStarted,onReset}){
   const bottomRef=useRef(null);
   useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[messages,loading]);
@@ -377,7 +359,6 @@ function Chat({kb,messages,setMessages,input,setInput,loading,setLoading,chatSta
   );
 }
 
-/* ── SHARED UI ── */
 function Shell({title,desc,children}){
   return(
     <div style={{maxWidth:820,animation:"fadeUp 0.3s ease"}}>
