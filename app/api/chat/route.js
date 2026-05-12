@@ -22,7 +22,7 @@ export async function POST(req) {
     const messages = body.messages || [];
     const system = body.system || "";
 
-    // 3. normaliza mensagens
+    // 3. normaliza mensagens para Gemini
     const contents = messages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content || "" }],
@@ -48,20 +48,31 @@ export async function POST(req) {
       }
     );
 
-    // 5. erro Gemini
+    // 🔥 LOG IMPORTANTE (debug de chamadas)
+    console.log("Gemini status:", res.status);
+
+    // 5. erro Gemini (AGORA CORRIGIDO)
     if (!res.ok) {
-      const err = await res.text();
+      const errorData = await res.json().catch(async () => {
+        const text = await res.text();
+        return { raw: text };
+      });
+
+      console.log("GEMINI ERROR FULL:", errorData);
 
       return Response.json(
         {
           error: "Erro na API Gemini",
-          details: err,
+          status: errorData?.error?.status || "unknown",
+          code: errorData?.error?.code || res.status,
+          message: errorData?.error?.message || "Erro sem mensagem clara",
+          details: errorData,
         },
         { status: res.status }
       );
     }
 
-    // 6. resposta
+    // 6. resposta válida
     const data = await res.json();
 
     const text =
@@ -76,7 +87,10 @@ export async function POST(req) {
         },
       ],
     });
+
   } catch (error) {
+    console.error("API CHAT ERROR:", error);
+
     return Response.json(
       {
         error: "Erro interno no servidor",
