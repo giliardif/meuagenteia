@@ -21,8 +21,7 @@ export async function POST(req) {
     const messages = body.messages || [];
     const system = body.system || "";
 
-    // 3. Normalização das mensagens para o formato do Gemini
-    // Filtra mensagens vazias e garante que as roles sejam 'user' ou 'model'
+    // 3. Normalização das mensagens
     const contents = messages
       .filter((m) => m.content && m.content.trim() !== "")
       .map((m) => ({
@@ -30,10 +29,15 @@ export async function POST(req) {
         parts: [{ text: m.content }],
       }));
 
-    // 4. Chamada para a API do Gemini
-    // Usando gemini-1.5-flash-latest para evitar erro 404 e ter mais cota que o 2.0
+    // Se não houver mensagens válidas, evita erro na API
+    if (contents.length === 0) {
+      return Response.json({ error: "Nenhuma mensagem válida enviada" }, { status: 400 });
+    }
+
+    // 4. Chamada para a API (URL AJUSTADA)
+    // Trocamos para 'gemini-1.5-flash' puro, que é o identificador padrão da v1beta
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -52,10 +56,9 @@ export async function POST(req) {
       }
     );
 
-    // Log de monitoramento no dashboard da Vercel
     console.log("Gemini status:", res.status);
 
-    // 5. Tratamento de Erros da API
+    // 5. Tratamento de Erros
     if (!res.ok) {
       const errorData = await res.json().catch(async () => {
         const text = await res.text();
@@ -68,18 +71,18 @@ export async function POST(req) {
         {
           error: "Erro na API Gemini",
           status: errorData?.error?.status || "UNKNOWN",
-          message: errorData?.error?.message || "Erro na comunicação com o Google",
+          message: errorData?.error?.message || "Erro de conexão",
           details: errorData,
         },
         { status: res.status }
       );
     }
 
-    // 6. Processamento da Resposta com Sucesso
+    // 6. Resposta com Sucesso
     const data = await res.json();
     const text =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "O modelo não retornou um conteúdo válido.";
+      "O modelo não retornou uma resposta.";
 
     return Response.json({
       content: [
@@ -92,7 +95,6 @@ export async function POST(req) {
 
   } catch (error) {
     console.error("API CHAT ERROR:", error);
-
     return Response.json(
       {
         error: "Erro interno no servidor Vercel",
