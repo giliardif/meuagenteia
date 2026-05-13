@@ -29,21 +29,22 @@ export async function POST(req) {
         parts: [{ text: m.content }],
       }));
 
-    // Se não houver mensagens válidas, evita erro na API
     if (contents.length === 0) {
       return Response.json({ error: "Nenhuma mensagem válida enviada" }, { status: 400 });
     }
 
-    // 4. Chamada para a API (URL AJUSTADA)
-    // Trocamos para 'gemini-1.5-flash' puro, que é o identificador padrão da v1beta
+    // 4. Chamada para a API (MUDAMOS PARA v1 - VERSÃO ESTÁVEL)
+    // A v1 é mais garantida para o modelo gemini-1.5-flash
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          // Nota: v1 pode não suportar system_instruction da mesma forma que a vbeta em alguns casos.
+          // Se der erro de instrução, moveremos o 'system' para a primeira mensagem do 'contents'.
           system_instruction: system
             ? { parts: [{ text: system }] }
             : undefined,
