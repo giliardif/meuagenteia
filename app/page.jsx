@@ -61,15 +61,35 @@ Ao receber uma saudação, apresente-se brevemente e pergunte como pode ajudar.`
 const TONES = ["acolhedora", "formal", "descontraída", "direta", "entusiasmada"];
 const SEGMENTS = ["Clínica Médica", "Restaurante", "Academia", "E-commerce", "Consultório", "Escritório", "Hotel", "Salão de Beleza"];
 
+/* =========================
+   🔥 ALTERAÇÃO FEITA AQUI
+   ========================= */
 async function callAPI(messages, systemPrompt) {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, system: systemPrompt }),
   });
+
   const data = await res.json();
-  return (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
+
+  console.log("API RESPONSE:", data);
+
+  if (Array.isArray(data?.content)) {
+    return data.content
+      .filter(b => b.type === "text")
+      .map(b => b.text)
+      .join("\n");
+  }
+
+  if (typeof data?.text === "string") return data.text;
+  if (typeof data?.message === "string") return data.message;
+  if (typeof data?.content === "string") return data.content;
+
+  return "Não consegui interpretar a resposta da API.";
 }
+
+/* ========================= */
 
 export default function App() {
   const [view, setView] = useState("admin");
