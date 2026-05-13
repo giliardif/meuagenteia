@@ -21,20 +21,28 @@ export async function POST(req) {
     const messages = body.messages || [];
     const system = body.system || "";
 
-    // 3. Normalização das mensagens
-    const contents = messages
+    // 3. Normalização das mensagens (Compatível com v1)
+    let contents = messages
       .filter((m) => m.content && m.content.trim() !== "")
       .map((m) => ({
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.content }],
       }));
 
+    // Se houver uma instrução de sistema, injetamos no início do contexto
+    // Isso resolve o erro 'Unknown name "system_instruction"' na v1
+    if (system && system.trim() !== "") {
+      contents.unshift({
+        role: "user",
+        parts: [{ text: `INSTRUÇÃO DE SISTEMA: ${system}\n\nPor favor, siga as instruções acima para todas as interações seguintes.` }],
+      });
+    }
+
     if (contents.length === 0) {
       return Response.json({ error: "Nenhuma mensagem válida enviada" }, { status: 400 });
     }
 
-    // 4. Chamada para a API (MUDAMOS PARA v1 - VERSÃO ESTÁVEL)
-    // A v1 é mais garantida para o modelo gemini-1.5-flash
+    // 4. Chamada para a API (v1 Estável)
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
@@ -43,11 +51,6 @@ export async function POST(req) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          // Nota: v1 pode não suportar system_instruction da mesma forma que a vbeta em alguns casos.
-          // Se der erro de instrução, moveremos o 'system' para a primeira mensagem do 'contents'.
-          system_instruction: system
-            ? { parts: [{ text: system }] }
-            : undefined,
           contents,
           generationConfig: {
             maxOutputTokens: 1000,
