@@ -3,13 +3,13 @@ export async function GET() {
     ok: true,
     message: "API Chat funcionando 🚀",
     keyExists: !!process.env.GEMINI_API_KEY,
-    keyStart: process.env.GEMINI_API_KEY?.slice(0, 10),
+    // Removido slice para evitar vazamento acidental em logs, apenas confirma existência
   });
 }
 
 export async function POST(req) {
   try {
-    // 1. valida API KEY
+    // 1. Valida API KEY
     if (!process.env.GEMINI_API_KEY) {
       return Response.json(
         { error: "GEMINI_API_KEY não configurada no Vercel" },
@@ -17,20 +17,22 @@ export async function POST(req) {
       );
     }
 
-    // 2. lê body
+    // 2. Lê body
     const body = await req.json().catch(() => ({}));
     const messages = body.messages || [];
     const system = body.system || "";
 
-    // 3. normaliza mensagens para Gemini
-    const contents = messages.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content || "" }],
-    }));
+    // 3. Normaliza mensagens para Gemini (Filtra mensagens vazias e ajusta roles)
+    const contents = messages
+      .filter((m) => m.content && m.content.trim() !== "")
+      .map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
 
-    // 4. chamada Gemini
+    // 4. Chamada Gemini (MODELO TROCADO PARA 1.5-FLASH PARA MAIOR COTA)
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -43,15 +45,15 @@ export async function POST(req) {
           contents,
           generationConfig: {
             maxOutputTokens: 1000,
+            temperature: 0.7, // Adicionado para respostas mais naturais
           },
         }),
       }
     );
 
-    // 🔥 LOG IMPORTANTE (debug de chamadas)
     console.log("Gemini status:", res.status);
 
-    // 5. erro Gemini (AGORA CORRIGIDO)
+    // 5. Erro Gemini
     if (!res.ok) {
       const errorData = await res.json().catch(async () => {
         const text = await res.text();
@@ -64,20 +66,17 @@ export async function POST(req) {
         {
           error: "Erro na API Gemini",
           status: errorData?.error?.status || "unknown",
-          code: errorData?.error?.code || res.status,
-          message: errorData?.error?.message || "Erro sem mensagem clara",
-          details: errorData,
+          message: errorData?.error?.message || "Erro de cota ou conexão",
         },
         { status: res.status }
       );
     }
 
-    // 6. resposta válida
+    // 6. Resposta válida
     const data = await res.json();
-
     const text =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Não consegui processar sua solicitação.";
+      "O modelo não retornou uma resposta válida.";
 
     return Response.json({
       content: [
@@ -90,7 +89,6 @@ export async function POST(req) {
 
   } catch (error) {
     console.error("API CHAT ERROR:", error);
-
     return Response.json(
       {
         error: "Erro interno no servidor",
