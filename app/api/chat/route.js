@@ -1,92 +1,68 @@
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 export async function GET() {
   return Response.json({
     ok: true,
-    message: "API Chat funcionando 🚀",
-    keyExists: !!process.env.GEMINI_API_KEY,
+    message: "API Chat funcionando 🚀 (OpenAI)",
+    keyExists: !!process.env.OPENAI_API_KEY,
   });
 }
 
 export async function POST(req) {
   try {
-    // 1. Validação da API KEY
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       return Response.json(
-        { error: "GEMINI_API_KEY não configurada no Vercel" },
+        { error: "OPENAI_API_KEY não configurada no Vercel" },
         { status: 500 }
       );
     }
 
-    // 2. Leitura do corpo da requisição
     const body = await req.json().catch(() => ({}));
     const messages = body.messages || [];
     const system = body.system || "";
 
-    // 3. Normalização das mensagens (Compatível com v1)
-    let contents = messages
-      .filter((m) => m.content && m.content.trim() !== "")
-      .map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }));
+    // Converte seu formato para formato OpenAI
+    const formattedMessages = [];
 
-    // Se houver uma instrução de sistema, injetamos no início do contexto
-    // Isso resolve o erro 'Unknown name "system_instruction"' na v1
+    // System prompt (OpenAI usa role: system)
     if (system && system.trim() !== "") {
-      contents.unshift({
-        role: "user",
-        parts: [{ text: `INSTRUÇÃO DE SISTEMA: ${system}\n\nPor favor, siga as instruções acima para todas as interações seguintes.` }],
+      formattedMessages.push({
+        role: "system",
+        content: system,
       });
     }
 
-    if (contents.length === 0) {
-      return Response.json({ error: "Nenhuma mensagem válida enviada" }, { status: 400 });
+    // Mensagens do chat
+    for (const m of messages) {
+      if (!m.content || m.content.trim() === "") continue;
+
+      formattedMessages.push({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.content,
+      });
     }
 
-    // 4. Chamada para a API (v1 Estável)
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            maxOutputTokens: 1000,
-            temperature: 0.7,
-          },
-        }),
-      }
-    );
-
-    console.log("Gemini status:", res.status);
-
-    // 5. Tratamento de Erros
-    if (!res.ok) {
-      const errorData = await res.json().catch(async () => {
-        const text = await res.text();
-        return { raw: text };
-      });
-
-      console.error("GEMINI ERROR FULL:", errorData);
-
+    if (formattedMessages.length === 0) {
       return Response.json(
-        {
-          error: "Erro na API Gemini",
-          status: errorData?.error?.status || "UNKNOWN",
-          message: errorData?.error?.message || "Erro de conexão",
-          details: errorData,
-        },
-        { status: res.status }
+        { error: "Nenhuma mensagem enviada" },
+        { status: 400 }
       );
     }
 
-    // 6. Resposta com Sucesso
-    const data = await res.json();
+    // CHAMADA GPT
+    const completion = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: formattedMessages,
+      temperature: 0.7,
+      max_tokens: 1000,
+    });
+
     const text =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "O modelo não retornou uma resposta.";
+      completion?.choices?.[0]?.message?.content || "Sem resposta.";
 
     return Response.json({
       content: [
@@ -96,12 +72,12 @@ export async function POST(req) {
         },
       ],
     });
-
   } catch (error) {
     console.error("API CHAT ERROR:", error);
+
     return Response.json(
       {
-        error: "Erro interno no servidor Vercel",
+        error: "Erro interno",
         details: error.message,
       },
       { status: 500 }
