@@ -72,8 +72,11 @@ async function callAPI(messages, systemPrompt) {
   });
 
   const data = await res.json();
-
   console.log("API RESPONSE:", data);
+
+  if (!res.ok) {
+    throw new Error(data?.details || data?.error || `Erro ${res.status}`);
+  }
 
   if (Array.isArray(data?.content)) {
     return data.content
@@ -83,10 +86,10 @@ async function callAPI(messages, systemPrompt) {
   }
 
   if (typeof data?.text === "string") return data.text;
-  if (typeof data?.message === "string") return data.message;
   if (typeof data?.content === "string") return data.content;
 
-  return "Não consegui interpretar a resposta da API.";
+  throw new Error("Formato de resposta inesperado");
+
 }
 
 /* ========================= */
