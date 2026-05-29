@@ -1,22 +1,20 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 export async function GET() {
   return Response.json({
     ok: true,
-    message: "API Chat funcionando 🚀 (OpenAI)",
-    keyExists: !!process.env.OPENAI_API_KEY,
+    message: "API Chat funcionando 🚀 (Gemini)",
+    keyExists: !!process.env.GEMINI_API_KEY,
   });
 }
 
 export async function POST(req) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return Response.json(
-        { error: "OPENAI_API_KEY não configurada no Vercel" },
+        { error: "GEMINI_API_KEY não configurada no Vercel" },
         { status: 500 }
       );
     }
@@ -25,44 +23,54 @@ export async function POST(req) {
     const messages = body.messages || [];
     const system = body.system || "";
 
-    // Converte seu formato para formato OpenAI
-    const formattedMessages = [];
+    // Gemini usa history separado da mensagem atual
+    const history = [];
+    let lastUserMessage = "";
 
-    // System prompt (OpenAI usa role: system)
-    if (system && system.trim() !== "") {
-      formattedMessages.push({
-        role: "system",
-        content: system,
-      });
-    }
-
-    // Mensagens do chat
     for (const m of messages) {
       if (!m.content || m.content.trim() === "") continue;
 
-      formattedMessages.push({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: m.content,
-      });
+      const role = m.role === "assistant" ? "model" : "user";
+
+      // Guarda a última mensagem do user separada
+      if (role === "user") {
+        // Empurra a anterior pro history antes de sobrescrever
+        if (lastUserMessage !== "") {
+          // já foi adicionada no loop anterior
+        }
+        lastUserMessage = m.content;
+        history.push({ role, parts: [{ text: m.content }] });
+      } else {
+        history.push({ role, parts: [{ text: m.content }] });
+      }
     }
 
-    if (formattedMessages.length === 0) {
+    // A última mensagem do user é enviada via sendMessage
+    // Remove do history para não duplicar
+    const lastMessage = history.pop();
+
+    if (!lastMessage || lastMessage.role !== "user") {
       return Response.json(
-        { error: "Nenhuma mensagem enviada" },
+        { error: "A última mensagem deve ser do usuário" },
         { status: 400 }
       );
     }
 
-    // CHAMADA GPT
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: formattedMessages,
-      temperature: 0.7,
-      max_tokens: 1000,
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      ...(system && system.trim() !== ""
+        ? { systemInstruction: system }
+        : {}),
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1000,
+      },
     });
 
-    const text =
-      completion?.choices?.[0]?.message?.content || "Sem resposta.";
+    const chat = model.startChat({ history });
+
+    const result = await chat.sendMessage(lastMessage.parts[0].text);
+    const text = result.response.text();
 
     return Response.json({
       content: [
