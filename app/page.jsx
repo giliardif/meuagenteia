@@ -64,32 +64,40 @@ const SEGMENTS = ["Clínica Médica", "Restaurante", "Academia", "E-commerce", "
 /* =========================
    🔥 ALTERAÇÃO FEITA AQUI
    ========================= */
-async function callAPI(messages, systemPrompt) {
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, system: systemPrompt }),
-  });
+async function callAPI(messages, systemPrompt, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, system: systemPrompt }),
+        signal: AbortSignal.timeout(15000), // timeout de 15s
+      });
 
-  const data = await res.json();
-  console.log("API RESPONSE:", data);
+      const data = await res.json();
+      console.log(`API RESPONSE (tentativa ${attempt + 1}):`, data);
 
-  if (!res.ok) {
-    throw new Error(data?.details || data?.error || `Erro ${res.status}`);
+      if (!res.ok) {
+        throw new Error(data?.details || data?.error || `Erro ${res.status}`);
+      }
+
+      if (Array.isArray(data?.content)) {
+        return data.content.filter(b => b.type === "text").map(b => b.text).join("\n");
+      }
+      if (typeof data?.text === "string") return data.text;
+      if (typeof data?.content === "string") return data.content;
+
+      throw new Error("Formato de resposta inesperado");
+
+    } catch (err) {
+      console.warn(`Tentativa ${attempt + 1} falhou:`, err.message);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, 1500)); // espera 1.5s antes de tentar de novo
+      } else {
+        throw err; // esgotou as tentativas
+      }
+    }
   }
-
-  if (Array.isArray(data?.content)) {
-    return data.content
-      .filter(b => b.type === "text")
-      .map(b => b.text)
-      .join("\n");
-  }
-
-  if (typeof data?.text === "string") return data.text;
-  if (typeof data?.content === "string") return data.content;
-
-  throw new Error("Formato de resposta inesperado");
-
 }
 
 /* ========================= */
